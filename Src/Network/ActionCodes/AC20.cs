@@ -27,7 +27,12 @@ namespace Wonderland_Private_Server.ActionCodes
         }
         void Recv8(Player p, RecievePacket r)
         {
-            if (p == null || p.CurMap == null || p.NativeEventActive) return;
+            if (p == null || p.CurMap == null) return;
+            if (p.NativeEventActive)
+            {
+                DebugSystem.Write($"[AC20.Recv8] Swallowed portal click for {p.CharName}: a native event session is still active.");
+                return;
+            }
 
             // Tent interiors use the owner's charID as MapID; the EVE lookups
             // below would resolve that to a real map and swallow the exit-door
@@ -89,7 +94,11 @@ namespace Wonderland_Private_Server.ActionCodes
         }
         void Recv1(Player p, RecievePacket r)
         {
-            if (p.NativeEventActive) return;
+            if (p.NativeEventActive)
+            {
+                DebugSystem.Write($"[AC20.Recv1] Swallowed NPC click for {p.CharName}: a native event session is still active.");
+                return;
+            }
             if (p.CurMap == null)
             {
                 p.Send(Tools.FromFormat("bb", 20, 8));

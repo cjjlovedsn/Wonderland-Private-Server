@@ -145,7 +145,11 @@ namespace Game.Maps
             var entry = data?.Entry_Points?.FirstOrDefault(e => e.clickID == entryId &&
                 (e.unknownbyte3 == 1 || e.unknownbyte3 == 2));
             if (entry == null) return false;
-            if (player.NativeEventActive) return true;
+            if (player.NativeEventActive)
+            {
+                DebugSystem.Write("[EveEventInterpreter] TryExecuteEntry swallowed: native event still active for " + player.CharName);
+                return true;
+            }
             // Maka's client reports entry2 before the final movement update:
             // observed (242,715), (222,715), (322,735) border its native rectangle.
             int margin = map.MapID == 11075 && entryId == 2 ? 2 : entry.unknownbyte3 == 1 ? 0 : 1;
@@ -198,7 +202,11 @@ namespace Game.Maps
 
         public static bool TryExecuteRegion(Player player, GameMap map, ushort? previousX = null, ushort? previousY = null)
         {
-            if (player.NativeEventActive) return true;
+            if (player.NativeEventActive)
+            {
+                DebugSystem.Write("[EveEventInterpreter] TryExecuteRegion swallowed: native event still active for " + player.CharName);
+                return true;
+            }
             var data = DataBase.GameDataBase.GlobalInstance?.EveDat?.GetMapData((ushort)map.MapID);
             if (data?.Entry_Points == null) return false;
             foreach (var entry in data.Entry_Points.Where(e => e.unknownbyte3 == 1))
@@ -804,7 +812,24 @@ namespace Game.Maps
             player.Send(new SendPacket(packets.ToArray()));
         }
 
-        private static void StartSession(Player player, GameMap map, ushort clickId, EventsinMapEntries ev, EventSubEntry branch, bool allowTransition = true)
+        // A question/speech frame the client never renders would keep event mode
+        // (6,2,1) held forever and freeze the character with nothing to answer.
+        // Release the session instead of waiting indefinitely.
+        private static void ArmWatchdog(Player player, object token, int timeoutMs)
+        {
+            var stale = player.NativeEventWatchdog;
+            player.NativeEventWatchdog = null;
+            if (stale != null) stale.Dispose();
+            player.NativeEventWatchdog = new System.Threading.Timer(state =>
+            {
+                if (player.NativeEventToken != token) return;
+                DebugSystem.Write("[EveEventInterpreter] Watchdog released a stuck native event for " + player.CharName);
+                player.SendHeadBanner("Dialogue did not respond; interaction was closed.");
+                player.CancelInteraction();
+            }, null, timeoutMs, System.Threading.Timeout.Infinite);
+        }
+
+        private static void StartSession(Player player, GameMap map, ushort clickId, EventsinMapEntries ev, EventSubEntry branch, bool allowTransition = true, int autoDepth = 0)
         {
             if (RejectDisabledNativeEvent(player, map, ev)) return;
             if (TryRunWaterGathering(player, map, ev, branch)) return;
@@ -852,6 +877,35 @@ namespace Game.Maps
                         if (playerChoice || (op.DialogPtr == 2 && op.dialog2 == 6))
                         {
                             ushort question = playerChoice ? op.dialog2 : op.dialog3;
+                            // Doors and walk-in regions start sessions without an NPC
+                            // click. The CN client only arms its dialogue actor on NPC
+                            // clicks, so a subject7 question from an entry has no actor
+                            // and the client never opens the dialog; event mode (6,2,1)
+                            // then holds the character frozen with nothing to answer.
+                            // Resolve entry questions server-side via the first
+                            // eligible answer branch, mirroring the door's default.
+                            if (clickId == 0)
+                            {
+                                if (autoDepth >= 8) { finish(); return; }
+                                var answers = new List<ushort>();
+                                foreach (var b in ev.SubEntry)
+                                    if (b != null && b.unknownbyte1 == 7 && b.unknownword1 == question &&
+                                        b.unknownword2 != 0 && b.SubEntry != null && b.SubEntry.Count > 0 &&
+                                        !answers.Contains(b.unknownword2))
+                                        answers.Add(b.unknownword2);
+                                EventSubEntry picked = null; ushort pickedAnswer = 0;
+                                foreach (var answer in answers)
+                                {
+                                    var sel = FindBranch(player, map, ev, 7, question, answer);
+                                    if (sel != null) { picked = sel; pickedAnswer = answer; break; }
+                                }
+                                DebugSystem.Write("[EveEventInterpreter] Entry question resolved server-side: map=" + map.MapID +
+                                    " event=" + ev.clickID + " branch=" + branch.subIndex + " question=" + question +
+                                    (picked != null ? " -> answer " + pickedAnswer + " (branch " + picked.subIndex + ")" : " -> no answer branch"));
+                                if (picked != null) StartSession(player, map, clickId, ev, picked, true, autoDepth + 1);
+                                else finish();
+                                return;
+                            }
                             player.OnDialogueChoice = choice => {
                                 if (player.NativeEventToken != token) return;
                                 // Native option callbacks are 20/21 or 30..39. Close is 40,
@@ -873,11 +927,13 @@ namespace Game.Maps
                                 (map.MapID == 11075 && (ev.clickID == 1 || ev.clickID == 2));
                             byte choiceMode = (byte)(singleChoiceAck ? 1 : 0);
                             player.Send(BuildEventFrame(6, (byte)(playerChoice ? 7 : 3), (ushort)(playerChoice ? 0 : op.dialog1), choiceMode, 0, question, step, branch.subIndex));
+                            ArmWatchdog(player, token, 120000);
                             return;
                         }
                         if (IsNpcPath(op))
                         {
                             player.OnInteractionComplete = advance;
+                            ArmWatchdog(player, token, 120000);
                             SendNpcPathGroup(player, branch, op, ref index);
                             return;
                         }
@@ -891,6 +947,7 @@ namespace Game.Maps
                         if (playerSpeech || npcSpeech || path || movie || music || playerEffect)
                         {
                             player.OnInteractionComplete = advance;
+                            ArmWatchdog(player, token, movie ? 600000 : 120000);
                             if (playerSpeech || npcSpeech)
                                 player.Send(BuildEventFrame(1, (byte)(playerSpeech ? 7 : 3), (ushort)(playerSpeech ? 0 : op.dialog1),
                                     1, 0, playerSpeech ? op.dialog2 : op.dialog3, step, branch.subIndex));

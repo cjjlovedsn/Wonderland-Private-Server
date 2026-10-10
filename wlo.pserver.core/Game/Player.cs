@@ -1744,6 +1744,7 @@ namespace Game
         }
         public bool NativeEventActive { get; internal set; }
         internal object NativeEventToken;
+        internal System.Threading.Timer NativeEventWatchdog;
         public Action OnInteractionComplete;
         public Action<byte> OnDialogueChoice;
         public Action OnMinigameWon;
@@ -1769,6 +1770,8 @@ namespace Game
         {
             NativeEventActive = false;
             NativeEventToken = null;
+            NativeEventWatchdog?.Dispose();
+            NativeEventWatchdog = null;
             QueueData?.Clear();
             StepQueue?.Clear();
             OnDialogueChoice = null;
