@@ -42,6 +42,10 @@ namespace Wonderland_Private_Server.ActionCodes
                     // Restore the validated vehicle only after native map loading finishes.
                     Game.PlayerRelated.VehicleManager.SyncVehicleOnMapEntry(p);
 
+                    // Tent furniture sent from SendMapInfo arrives before the
+                    // client's scene is ready and is dropped. Re-send here.
+                    (p.CurMap as Game.Code.Tent)?.SendTentItemsToPlayer(p);
+
                     DebugSystem.Write($"[AC12.Recv1] Map acknowledged -> MapID={p.CurMap?.MapID} PendingBeach={p.PendingBeachCutscene} BeachActive={p.BeachCutsceneActive} Quest12040={p.Quests?.ContainsKey(12040)}");
 
                     if ((p.PendingBeachCutscene || (p.CurMap != null && (p.CurMap.MapID == 10035 || p.CurMap.MapID == 10039) && p.Quests != null && !p.Quests.ContainsKey(12040))) && !p.BeachCutsceneActive)

@@ -800,29 +800,34 @@ namespace Game.Maps
                                     case 2:
                                     case 3:
                                         player.OpenNpcSale((byte)(actionOrMap == 2 ? 1 : 0));
+                                        EndWindowSession(player, "NpcSale");
                                         return true;
 
                                     // 4: Props Keep / Storage Bank
                                     case 4:
                                         player.OpenPropsKeeper();
                                         DebugSystem.Write($"[EveEventInterpreter] Opened Character Props Keep Storage for {player.CharName}");
+                                        EndWindowSession(player, "PropsKeep");
                                         return true;
 
                                     // 5: Pet Hotel (the doctor's third option).
                                     case 5:
                                         player.OpenPetHotel();
+                                        EndWindowSession(player, "PetHotel");
                                         return true;
 
                                     // 6, 7: Witch Doctor / Clinic Full Heal & Revive (Player + Companions)
                                     case 6:
                                     case 7:
                                         player.BeginNpcRest();
+                                        EndWindowSession(player, "NpcRest");
                                         return true;
 
                                     // 9: Stock Keep / Hotel / Guild Storage
                                     case 9:
                                         player.OpenPropsKeeper();
                                         DebugSystem.Write($"[EveEventInterpreter] Opened Character Stock Keep for {player.CharName}");
+                                        EndWindowSession(player, "StockKeep");
                                         return true;
 
                                     default:
@@ -1004,6 +1009,18 @@ namespace Game.Maps
             dPkt.Pack8((byte)((talkId >> 8) & 0xFF));         // TalkID MID
             dPkt.Pack8((byte)((talkId >> 16) & 0xFF));        // TalkID MSB
             return dPkt;
+        }
+
+        // Window-opening system actions hand control to their own protocol
+        // (AC27 sale, AC30 storage, AC31 hotel/rest). The native event session
+        // must not stay armed: a dangling NativeEventActive silences every later
+        // NPC click, portal and movement packet until relogin. The pcap-verified
+        // Witch Doctor flow ends its session the same way after opening a window.
+        private static void EndWindowSession(Player player, string window)
+        {
+            if (!player.NativeEventActive) return;
+            player.CancelInteraction();
+            DebugSystem.Write("[EveEventInterpreter] Ended native session after opening " + window + " for " + player.CharName);
         }
 
         private struct MonkeyDialogueStep

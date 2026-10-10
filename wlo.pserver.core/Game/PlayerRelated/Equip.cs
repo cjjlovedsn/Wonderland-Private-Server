@@ -1465,7 +1465,7 @@ namespace Game.Code
         #endregion
 
         #region Helper Methods
-        int CalcMaxExp(byte rebirth, int Level)
+        public int CalcMaxExp(byte rebirth, int Level)
         {
             if (rebirth == 0)
             {

@@ -193,13 +193,16 @@ public abstract class Packet : IPacket
 		return result;
 	}
 
+	// The native client renders all wire strings (names, chat, NPC text) as Big5.
+	private static readonly Encoding WireTextEncoding = Encoding.GetEncoding(950);
+
 	public string UnpackString()
 	{
 		string result = "";
 		int num = Unpack8();
 		if (m_nUnpackIndex + num <= m_buffer.Length)
 		{
-			result = Encoding.ASCII.GetString(m_buffer, m_nUnpackIndex, num);
+			result = WireTextEncoding.GetString(m_buffer, m_nUnpackIndex, num);
 		}
 		m_nUnpackIndex += (ushort)num;
 		return result;
@@ -210,8 +213,9 @@ public abstract class Packet : IPacket
 		string text = "";
 		if (m_nUnpackIndex < m_buffer.Length)
 		{
-			text = Encoding.ASCII.GetString(m_buffer, m_nUnpackIndex, m_buffer.Length - m_nUnpackIndex);
-			m_nUnpackIndex += (ushort)text.Length;
+			int byteCount = m_buffer.Length - m_nUnpackIndex;
+			text = WireTextEncoding.GetString(m_buffer, m_nUnpackIndex, byteCount);
+			m_nUnpackIndex += (ushort)byteCount;
 		}
 		return text;
 	}
@@ -264,13 +268,15 @@ public abstract class Packet : IPacket
 
 	public virtual void PackString(string strVal)
 	{
-		Pack8((byte)(strVal?.Length ?? 0));
-		CopyToBuffer(Encoding.ASCII.GetBytes((strVal == null) ? "" : strVal), strVal?.Length ?? 0);
+		byte[] encoded = WireTextEncoding.GetBytes(strVal ?? "");
+		Pack8((byte)encoded.Length);
+		CopyToBuffer(encoded, encoded.Length);
 	}
 
 	public virtual void PackStringN(string strVal)
 	{
-		CopyToBuffer(Encoding.ASCII.GetBytes(strVal), strVal.Length);
+		byte[] encoded = WireTextEncoding.GetBytes(strVal ?? "");
+		CopyToBuffer(encoded, encoded.Length);
 	}
 
 	protected virtual void SetPtr(int ptr = 0)

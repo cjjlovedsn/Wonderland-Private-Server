@@ -527,6 +527,33 @@ namespace Game
 
 
         }
+
+        // Offline build used by the web character creator: no socket attached,
+        // all Send() calls become no-ops (m_socket is null-safe).
+        public Player(global::DataFiles.PhxItemDat itemdat)
+            : base(new Action<IPacket>(NoOpSend), itemdat)
+        {
+            QueueData = new Queue<SendPacket>(25);
+            m_inv = new Inventory(this, itemdat);
+            m_storage = new Inventory(this, itemdat);
+            onWearEquip = m_inv.onWearEquip;
+            onEquip_Remove = m_inv.onUnEquip;
+
+            m_useracc = new User();
+            m_tent = new Game.Code.Tent(this);
+
+            Flags = new PlayerFlagManager();
+            m_settings = new ClientSettings();
+            m_friendlist = new Game.PlayerRelated.Friendlist(this, new Action<SendPacket>(Send));
+            m_Mail = new MailManager(this);
+
+            m_teammembers = new List<Player>();
+            m_riceball = new RiceBall(this);
+            m_started_Quests = new List<Quest>();
+        }
+
+        static void NoOpSend(IPacket p) { }
+
         ~Player()
         {
         }
@@ -697,23 +724,27 @@ namespace Game
 
         public void OpenPetHotel()
         {
-            SendPetHotelList();
+            SendPetHotelList(true);
             Send(Tools.FromFormat("bb", 31, 7));
         }
 
-        public void SendPetHotelList()
+        public void SendPetHotelList(bool clearStaleSlots = false)
         {
-            // Native 0x3b377c: 64-byte records plus a length-prefixed name.
-            // Explicit removals clear stale slots; AC31:6 only updates supplied records.
-            for (byte slot = 1; slot <= 10; slot++)
-                if (HotelPets == null || !HotelPets.ContainsKey(slot)) Send(Tools.FromFormat("bbb", 31, 4, slot));
+            // Same record family as AC 15:8: 29-byte prefix, then a
+            // length-prefixed name, then skills/equipment/tail. The fixed part
+            // totals 64 bytes (verified native 0x3b377c). The client renders
+            // only the first record of a 31:6 packet, so each pet gets its own
+            // packet. A name placed after the 64-byte tail is never read.
+            if (clearStaleSlots)
+                for (byte slot = 1; slot <= 10; slot++)
+                    if (HotelPets == null || !HotelPets.ContainsKey(slot)) Send(Tools.FromFormat("bbb", 31, 4, slot));
             if (HotelPets == null || HotelPets.Count == 0) return;
-            var packet = new SendPacket();
-            packet.PackArray(new byte[] { 31, 6 });
             foreach (var entry in HotelPets.OrderBy(kv => kv.Key))
             {
                 var pet = entry.Value;
                 if (entry.Key < 1 || entry.Key > 10 || pet == null || pet.PetID == 0) continue;
+                var packet = new SendPacket();
+                packet.PackArray(new byte[] { 31, 6 });
                 packet.Pack8(entry.Key);
                 uint clientId = GetCompanionBroadcastId(pet.PetID);
                 packet.Pack16((ushort)clientId);
@@ -725,15 +756,15 @@ namespace Game
                 packet.Pack16(pet.Agi); packet.Pack16(pet.Wis);
                 packet.Pack8(pet.Reborn ? (byte)1 : (byte)0);
                 packet.Pack8(pet.Job); packet.Pack8(0); packet.Pack16(pet.SkillPoints);
-                byte[] name = System.Text.Encoding.ASCII.GetBytes(pet.PetName ?? "").Take(10).ToArray();
+                byte[] name = System.Text.Encoding.ASCII.GetBytes(pet.PetName ?? "").Take(16).ToArray();
                 packet.Pack8((byte)name.Length); packet.PackArray(name);
                 pet.PackSkills(packet);
                 foreach (ushort id in new[] { pet.Eq_Head, pet.Eq_Body, pet.Eq_Weapon, pet.Eq_Wrist, pet.Eq_Shoes, pet.Eq_Special })
                     packet.Pack16(id);
                 packet.Pack8(0); packet.Pack8(0); packet.Pack8(0);
-                packet.Pack16(0); packet.Pack16(0);
+                packet.Pack16(0); packet.Pack16(0); packet.Pack8(0);
+                Send(packet);
             }
-            Send(packet);
         }
         public EquipManager Eqs { get { return ((EquipManager)this) ?? null; } }
         public byte Emote { get { lock (mlock) return emote; } set { lock (mlock) emote = value; } }
@@ -846,19 +877,11 @@ namespace Game
                         prevMap.DstX_Axis = CurX;
                         prevMap.DstY_Axis = CurY;
 
-                        // When entering a tent from an overworld map, record the tent return location
-                        if (value != null && (value is Game.Code.Tent || (value as GameMap)?.Type == MapType.Tent))
-                        {
-                            if ((base.CurMap as GameMap)?.Type != MapType.Tent)
-                            {
-                                TentReturnMap = new WarpData()
-                                {
-                                    DstMap = (ushort)base.CurMap.MapID,
-                                    DstX_Axis = CurX,
-                                    DstY_Axis = CurY
-                                };
-                            }
-                        }
+                        // TentReturnMap is NOT recorded here: by the time the
+                        // CurMap switch runs, Teleport(Tent) has already set
+                        // CurX/CurY to the interior coords (Map.cs 1283-1284),
+                        // so recording here clobbers the correct return point
+                        // saved by onEnterTent / Teleport(Tent) with (460,700).
 
                         (base.CurMap as GameMap).onItemDropped_fromMap = null;
                         (base.CurMap as GameMap).onItemPickup_fromMap = null;
@@ -1040,6 +1063,8 @@ namespace Game
                 RecievePacket p = new RecievePacket(g.Buffer);
 
                 if (m_socket.isDisconnected()) { return; }
+
+                LastPacketTime = DateTime.Now;
 
                 p.SetPtr();
                 var b = p.Unpack8();

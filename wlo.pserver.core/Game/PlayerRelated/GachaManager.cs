@@ -26,10 +26,14 @@ namespace Game.PlayerRelated
 
         // IDs with reward tables in the original client. Lucky Pack is retained only
         // as a recognized, unavailable legacy pack; its custom pool was withdrawn.
+        // 26001-26019 are mall gear boxes: each holds one fixed item, modelled as a
+        // single-reward pack with weight 10000.
         private static readonly ushort[] PackIds = {
             34171, 34172, 34174, 34192, 34193, 34199, 34201, 34229,
             34248, 34296, 34297, 34346, 34349, 34365, 34366, 34367,
-            34381, 34382, 34383, 34384, 34385, 34386, 34387, 34388, 34333
+            34381, 34382, 34383, 34384, 34385, 34386, 34387, 34388, 34333,
+            26001, 26002, 26003, 26004, 26005, 26006, 26007, 26008, 26009,
+            26010, 26011, 26012, 26013, 26014, 26015, 26016, 26017, 26018, 26019
         };
         private static Dictionary<ushort, Pack> packs = new Dictionary<ushort, Pack>();
         private static PhxItemDat items;

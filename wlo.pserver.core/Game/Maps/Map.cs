@@ -339,7 +339,9 @@ namespace Game
             {
                 Parallel.ForEach(m_playerlist, player =>
                 {
-                    if (player.IdleTimer() > new TimeSpan(0, 30, 0) || player.isDisconnected())
+                    // The client has no heartbeat: it sends nothing while idle,
+                    // so this only clears forgotten sessions, not AFK players.
+                    if (player.IdleTimer() > new TimeSpan(12, 0, 0) || player.isDisconnected())
                     {
                         player.Disconnect();
                         DisconnectedQueue.Enqueue(player);
@@ -721,16 +723,11 @@ namespace Game
                     .OrderBy(pet => pet.Slot)
                     .ToList();
 
-                // Allocate session slots once, then restore the native login roster silently.
+                // Allocate session slots once, then restore the roster through the
+                // client-verified AC15:1 recruit path; the AC15:8 bulk record is ignored.
                 if (!src.PetRosterSynchronized)
                 {
-                    foreach (var pet in petRoster) pet.ClientSlot = 0;
-                    foreach (var pet in petRoster)
-                    {
-                        src.RegisterClientPet(pet);
-                    }
-                    SendPacket rosterPacket = QuestRelated.QuestManager.CreatePetListPacket(src);
-                    if (rosterPacket != null) src.Send(rosterPacket);
+                    QuestRelated.QuestManager.RestorePetRoster(src);
                     src.PetRosterSynchronized = true;
                 }
 
@@ -1526,7 +1523,9 @@ namespace Game
         public void onTentOpened(Tent Tentsrc)
         {
             if (Tents.TryAdd(Tentsrc.MapID, Tentsrc))
-                Broadcast(Tools.FromFormat("bbdWddW", 65, 1, Tentsrc.MapID, 36002, Tentsrc.X, Tentsrc.Y, 0));
+                // Tail word = exterior style: low byte indexes style table A
+                // (aLogin 0x5dd6b1, obj+0x2120), 0 = default itemID look.
+                Broadcast(Tools.FromFormat("bbdWddW", 65, 1, Tentsrc.MapID, 36002, Tentsrc.X, Tentsrc.Y, Tentsrc.TentType));
         }
         public void onTentClosing(Tent tent)
         {
@@ -1616,7 +1615,7 @@ namespace Game
                 {
                     if (r != null && !r.IsClosed)
                     {
-                        p.Send(Tools.FromFormat("bbdWddW", 65, 1, r.MapID, 36002, r.X, r.Y, 0));
+                        p.Send(Tools.FromFormat("bbdWddW", 65, 1, r.MapID, 36002, r.X, r.Y, r.TentType));
                     }
                 }
             }

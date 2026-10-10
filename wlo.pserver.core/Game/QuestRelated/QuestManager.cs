@@ -1391,6 +1391,8 @@ namespace Game.QuestRelated
             if (pets.Count == 0) return null;
 
             // Native RevInitFNpc (0x40b1e0): variable records, 182 bytes + name.
+            // Fixed part = 29 prefix + 15 skills + 6x21 equipment records + 12 tail;
+            // one byte short aborts client parsing after the first record.
             // Unlike AC15:1, this restores existing pets without a joined-party banner.
             SendPacket packet = new SendPacket();
             packet.PackArray(new byte[] { 15, 8 });
@@ -1440,8 +1442,34 @@ namespace Game.QuestRelated
                 packet.Pack8(0);
                 packet.Pack16(0);
                 packet.Pack16(0);
+                packet.Pack8(0);
             }
             return packet;
+        }
+
+        /// <summary>
+        /// Rebuilds the client pet roster through per-pet AC15:1 recruits. The
+        /// AC15:8 bulk roster record is ignored by aLogin.exe (never verified,
+        /// empirically leaves the roster empty after relogin), while AC15:1 is
+        /// the path the client is proven to render via the capture flow.
+        /// Cost: one join notification per pet at login.
+        /// </summary>
+        public static void RestorePetRoster(Player player)
+        {
+            if (player?.PlayerPets == null) return;
+            var roster = player.PlayerPets.Values.Where(p => p != null && p.PetID > 0).OrderBy(p => p.Slot).ToList();
+            foreach (var pet in roster) pet.ClientSlot = 0;
+            foreach (var pet in roster)
+            {
+                if (!player.RegisterClientPet(pet)) continue;
+                pet.NormalizeExpForLevel();
+                pet.NormalizeClientStats(inventory: player.Inv);
+                player.Send(CreatePetPacket(player, pet.PetID, pet.Slot, pet.HP, pet.MaxHP, pet.SP, pet.MaxSP,
+                    pet.Amity, pet.Level, pet.Str, pet.Con, pet.Int, pet.Wis, pet.Agi, pet.Exp, pet.Reborn, pet.Job));
+                SendPetProgression(player, pet);
+                var namePacket = CreatePetNamePacket(player, pet);
+                if (namePacket != null) player.Send(namePacket);
+            }
         }
 
         public static SendPacket CreatePetNamePacket(Player player, Player.PlayerPetData pet)

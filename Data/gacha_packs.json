@@ -2530,5 +2530,252 @@
         "weight": 32
       }
     ]
+  },
+  {
+    "item_id": 26001,
+    "name": "Sky Sword Box",
+    "source_table": "mall",
+    "rewards": [
+      {
+        "item_id": 11101,
+        "name": "Sky Sword",
+        "quantity": 1,
+        "weight": 10000
+      }
+    ]
+  },
+  {
+    "item_id": 26002,
+    "name": "Lord Sword Box",
+    "source_table": "mall",
+    "rewards": [
+      {
+        "item_id": 11102,
+        "name": "Lord Sword",
+        "quantity": 1,
+        "weight": 10000
+      }
+    ]
+  },
+  {
+    "item_id": 26003,
+    "name": "Beast Fork Box",
+    "source_table": "mall",
+    "rewards": [
+      {
+        "item_id": 12072,
+        "name": "Beast Fork",
+        "quantity": 1,
+        "weight": 10000
+      }
+    ]
+  },
+  {
+    "item_id": 26004,
+    "name": "Spirit Fork Box",
+    "source_table": "mall",
+    "rewards": [
+      {
+        "item_id": 12073,
+        "name": "Spirit Fork",
+        "quantity": 1,
+        "weight": 10000
+      }
+    ]
+  },
+  {
+    "item_id": 26005,
+    "name": "Polished Wand Box",
+    "source_table": "mall",
+    "rewards": [
+      {
+        "item_id": 14076,
+        "name": "Polished Wand",
+        "quantity": 1,
+        "weight": 10000
+      }
+    ]
+  },
+  {
+    "item_id": 26006,
+    "name": "Light Wand Box",
+    "source_table": "mall",
+    "rewards": [
+      {
+        "item_id": 14078,
+        "name": "Light Wand",
+        "quantity": 1,
+        "weight": 10000
+      }
+    ]
+  },
+  {
+    "item_id": 26007,
+    "name": "Attack Pestle Box",
+    "source_table": "mall",
+    "rewards": [
+      {
+        "item_id": 18063,
+        "name": "Attack Pestle",
+        "quantity": 1,
+        "weight": 10000
+      }
+    ]
+  },
+  {
+    "item_id": 26008,
+    "name": "Energy Halo Box",
+    "source_table": "mall",
+    "rewards": [
+      {
+        "item_id": 22135,
+        "name": "Energy Halo",
+        "quantity": 1,
+        "weight": 10000
+      }
+    ]
+  },
+  {
+    "item_id": 26009,
+    "name": "Golden Ears Box",
+    "source_table": "mall",
+    "rewards": [
+      {
+        "item_id": 22157,
+        "name": "Gold Ears",
+        "quantity": 1,
+        "weight": 10000
+      }
+    ]
+  },
+  {
+    "item_id": 26010,
+    "name": "Stand Ears Box",
+    "source_table": "mall",
+    "rewards": [
+      {
+        "item_id": 22158,
+        "name": "Stand Ears",
+        "quantity": 1,
+        "weight": 10000
+      }
+    ]
+  },
+  {
+    "item_id": 26011,
+    "name": "Jade Ears Box",
+    "source_table": "mall",
+    "rewards": [
+      {
+        "item_id": 22159,
+        "name": "Jade Ears",
+        "quantity": 1,
+        "weight": 10000
+      }
+    ]
+  },
+  {
+    "item_id": 26012,
+    "name": "Dark Evil Wing Box",
+    "source_table": "mall",
+    "rewards": [
+      {
+        "item_id": 25191,
+        "name": "Dark Evil Wings",
+        "quantity": 1,
+        "weight": 10000
+      }
+    ]
+  },
+  {
+    "item_id": 26013,
+    "name": "Angel Wings Box",
+    "source_table": "mall",
+    "rewards": [
+      {
+        "item_id": 25192,
+        "name": "Angel Wings",
+        "quantity": 1,
+        "weight": 10000
+      }
+    ]
+  },
+  {
+    "item_id": 26014,
+    "name": "Archangel Wings Box",
+    "source_table": "mall",
+    "rewards": [
+      {
+        "item_id": 25215,
+        "name": "Archangel Wings",
+        "quantity": 1,
+        "weight": 10000
+      }
+    ]
+  },
+  {
+    "item_id": 26015,
+    "name": "Crescent Bow Box",
+    "source_table": "mall",
+    "rewards": [
+      {
+        "item_id": 13061,
+        "name": "Crescent Bow",
+        "quantity": 1,
+        "weight": 10000
+      }
+    ]
+  },
+  {
+    "item_id": 26016,
+    "name": "Golden Rings Box",
+    "source_table": "mall",
+    "rewards": [
+      {
+        "item_id": 15050,
+        "name": "Golden Rings",
+        "quantity": 1,
+        "weight": 10000
+      }
+    ]
+  },
+  {
+    "item_id": 26017,
+    "name": "Purple Wing Robe Box",
+    "source_table": "mall",
+    "rewards": [
+      {
+        "item_id": 21174,
+        "name": "Purple Wing Robe",
+        "quantity": 1,
+        "weight": 10000
+      }
+    ]
+  },
+  {
+    "item_id": 26018,
+    "name": "Kung-Fu Suit Box",
+    "source_table": "mall",
+    "rewards": [
+      {
+        "item_id": 21213,
+        "name": "Kung-Fu Suit",
+        "quantity": 1,
+        "weight": 10000
+      }
+    ]
+  },
+  {
+    "item_id": 26019,
+    "name": "Thunder Spear Box",
+    "source_table": "mall",
+    "rewards": [
+      {
+        "item_id": 12101,
+        "name": "Thunder Spear",
+        "quantity": 1,
+        "weight": 10000
+      }
+    ]
   }
 ]

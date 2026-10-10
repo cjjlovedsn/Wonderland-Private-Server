@@ -57,15 +57,19 @@ public class PacketBuilder
 		}
 	}
 
+	// The native client renders all wire strings (names, chat, NPC text) as Big5.
+	private static readonly Encoding WireTextEncoding = Encoding.GetEncoding(950);
+
 	public void Add(string obj, bool nullstring = false)
 	{
 		if (obj != null)
 		{
+			byte[] encoded = WireTextEncoding.GetBytes(obj);
 			if (!nullstring)
 			{
-				tmp.Add((byte)obj.Length);
+				tmp.Add((byte)encoded.Length);
 			}
-			tmp.AddRange(Encoding.ASCII.GetBytes(obj));
+			tmp.AddRange(encoded);
 		}
 	}
 

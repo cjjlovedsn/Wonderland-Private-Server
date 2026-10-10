@@ -29,6 +29,22 @@ namespace Wonderland_Private_Server.ActionCodes
         {
             if (p == null || p.CurMap == null || p.NativeEventActive) return;
 
+            // Tent interiors use the owner's charID as MapID; the EVE lookups
+            // below would resolve that to a real map and swallow the exit-door
+            // request. The door is portal 1 (configured by Tent.Open).
+            if (p.CurMap is Game.Code.Tent tentMap)
+            {
+                WarpData exitWarp;
+                if (tentMap.TryGetExitWarp(r.Unpack16(), out exitWarp) &&
+                    p.CurMap.Teleport(TeleportType.CmD, p, 0, exitWarp))
+                {
+                    p.SaveCharacterData();
+                    return;
+                }
+                p.Send(Tools.FromFormat("bb", 20, 8));
+                return;
+            }
+
             if (p.CurMap is GameMap regionMap && EveEventInterpreter.TryExecuteRegion(p, regionMap)) return;
 
             // Portal debounce and spawn proximity guard

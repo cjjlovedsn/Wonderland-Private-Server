@@ -25,8 +25,10 @@ namespace Network.ActionCodes
         }
         void Recv1(Player p, RecievePacket r)
         {
-            // Packet format: 14 Byte Payload (Header 4 + AC 1 + Sub 1 + Payload 14 = 20)
-            // Bag(1) + Slot(1) + X(4 BE) + Y(4 BE) + Floor(4 BE) = 14 Bytes
+            // Captured layout (9 samples, 2026-10-09): Slot(1) + X(4 LE) +
+            // Y(4 LE) + Floor(4 LE, 1-based) + Rot(1) = 14 bytes payload.
+            // Coordinates are the tent's furniture GRID, not world pixels
+            // (drag samples span x 30-42 / y 37-46).
 
             if (r.Buffer.Length < 20)
             {
@@ -36,18 +38,20 @@ namespace Network.ActionCodes
 
             try
             {
-                byte bagIndex = r.Unpack8();        // Bag Index
-                byte slotIndex = r.Unpack8();       // Slot Index
+                // Pointer sits on the sub opcode when the handler is entered;
+                // consume it so the reads below align with the payload.
+                r.Unpack8();
+
+                byte slotIndex = r.Unpack8();       // Inventory slot
 
                 // Read coordinates as 32-bit integers LITTLE ENDIAN (Standard)
                 uint x = r.Unpack32();
                 uint y = r.Unpack32();
                 uint floor = r.Unpack32();
+                byte rotation = 0;
+                try { rotation = r.Unpack8(); } catch { }
 
-                DebugSystem.Write(DebugItemType.Error, $"[Tent] AC62,1 Place: Bag={bagIndex} Slot={slotIndex} Pos=({x},{y}) Flr={floor} (Forcing 0)");
-
-                // FORCE FLOOR 0 as requested
-                floor = 0;
+                DebugSystem.Write(DebugItemType.Error, $"[Tent] AC62,1 Place: Slot={slotIndex} Grid=({x},{y}) Flr={floor} Rot={rotation}");
 
                 if (p.Tent != null)
                 {
@@ -66,15 +70,12 @@ namespace Network.ActionCodes
                     ushort placeItemId = p.Inv[slotIndex].ItemID;
                     p.Inv.RemoveItem(slotIndex, 1, true);
 
-                    p.Tent.PlaceItem(placeItemId, (int)x, (int)y, (int)floor, 0);
+                    p.Tent.PlaceItem(placeItemId, (int)x, (int)y, (int)floor, rotation);
 
+                    // AC4 reload above is the authoritative confirmation. The
+                    // old [62][1][1] ack was misread by the client as a tent
+                    // config packet (type 1, colors 0) and rebuilt the room.
                     p.Tent.SendTentItemsToAll();
-
-                    // Send Confirmation
-                    SendPacket confirmation = new SendPacket();
-                    confirmation.PackArray(new byte[] { 62, 1 });
-                    confirmation.Pack8(1);
-                    p.Send(confirmation);
 
                     cGlobal.gCharacterDataBase?.SaveTentData(p);
                 }
@@ -88,6 +89,9 @@ namespace Network.ActionCodes
         {
             try
             {
+                // Consume the sub opcode so Index aligns with the payload.
+                r.Unpack8();
+
                 // Packet format based on user capture: Index(2) + X(4) + Y(4) + Floor(4) + Rot?(1)
                 ushort index = r.Unpack16();
                 uint x = r.Unpack32();

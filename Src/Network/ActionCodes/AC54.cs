@@ -50,7 +50,7 @@ namespace Network.ActionCodes
             SendPacket s = new SendPacket();
             s.Pack8((byte)ID);
             s.Pack8(201);
-            s.PackArray(new byte[] { 0, 1, 101, 0, 3, 103, 0, 2, 104, 0, 3, 102, 0, 3 });
+            s.PackArray(AC104.BuildCategoryMatrix(c));
             c.Send(s);
         }
 

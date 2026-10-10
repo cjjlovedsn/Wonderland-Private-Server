@@ -25,6 +25,8 @@ namespace Network.ActionCodes
         }
         void Recv1(Player r, RecievePacket p)
         {
+            p.Unpack8(); // consume sub opcode; skipping it shifts the dword
+                         // by one byte (client sends the tent's charID key)
             ((GameMap)r.CurMap).onEnterTent(p.Unpack32(), r);
         }
         void Recv2(Player r, RecievePacket p)

@@ -98,6 +98,26 @@ namespace Game.Code
             }
         }
 
+        // A tent exposes the owner's charID as its MapID, which collides with
+        // a real map in every EVE lookup (TryExecuteEntry resolves to the real
+        // map 10003 and rejects the door). AC20:8 must route through here.
+        public bool TryGetExitWarp(ushort portalID, out WarpData warp)
+        {
+            WarpPortal exit;
+            if (!Portals.TryGetValue((byte)portalID, out exit) || exit.DstID <= 0)
+            {
+                warp = null;
+                return false;
+            }
+            warp = new WarpData()
+            {
+                DstMap = (ushort)exit.DstID,
+                DstX_Axis = (ushort)exit.x,
+                DstY_Axis = (ushort)exit.y
+            };
+            return true;
+        }
+
         public void Open()
         {
             if (!_closed) return;
@@ -154,9 +174,6 @@ namespace Game.Code
 
             _ownerMap.onTentOpened(this);
             _owner.Send(Tools.FromFormat("bbb", 62, 59, 2));
-
-            // Send items immediately upon opening/entering
-            SendTentItemsToPlayer(_owner);
 
             _closed = false;
         }
@@ -247,20 +264,19 @@ namespace Game.Code
             //build queue
             //storeroom
             #region TentItems Send
-            // REVERTING: SubCmd 3 was showing items (even if outside tent)
-            // Using SubCmd 3 format that worked before
+            // 23:3 initializes the tent item window. The furniture packets are
+            // NOT sent here: the client's scene is still loading and drops
+            // them. AC12.Recv1 re-sends after the load acknowledgement.
             SendPacket initPacket = new SendPacket();
             initPacket.Pack8(23);
             initPacket.Pack8(3);
             t.Send(initPacket);
-
-            DebugSystem.Write(DebugItemType.Error, $"[Tent] SendMapInfo called - sending items to {t.CharName}");
-            SendTentItemsToPlayer(t);
             #endregion
 
-            // TEMPORARILY DISABLED FOR TESTING
-            //t.Send(Tools.FromFormat("bbw", 62, 14, _floorcolor));//floor
-            //t.Send(Tools.FromFormat("bbw", 62, 15, _wallcolor));//wallpaper
+            // NOTE: the old 62:1 "interior config" packet is gone — the CN
+            // dispatcher (aLogin 0x8c3e84, AC62) treats sub 1 as
+            // [slot u16][57B record] single-furniture-add and throws a range
+            // error on anything shorter. Style config must use another sub.
 
             //65,11 ???
 
@@ -394,9 +410,10 @@ namespace Game.Code
         /// </summary>
         void InitializeDefaultItems()
         {
-            // Default beginner crafting furniture in Wonderland Online
-            PlaceItem(38027, 43, 42, 0, 0); // Coconut Basin (38027)
-            PlaceItem(38049, 45, 42, 0, 0); // Work Platform / Low Workbench (38049)
+            // Furniture lives on the tent's own grid (client placement packets
+            // span x 30-42 / y 37-46) with a 1-based floor. Ground floor = 1.
+            PlaceItem(38027, 38, 42, 1, 0); // Coconut Basin (38027)
+            PlaceItem(38049, 40, 42, 1, 0); // Work Platform / Low Workbench (38049)
         }
 
         /// <summary>
@@ -467,38 +484,88 @@ namespace Game.Code
         }
 
         /// <summary>
-        /// Send all tent items to the player using discovered protocol
+        /// Send all tent items to the player via AC4 (client scene-object
+        /// bulk load, aLogin dispatcher case 4).
         /// </summary>
         public void SendTentItemsToPlayer(Player player)
         {
             if (player == null) return;
             try
             {
-                int sentCount = 0;
-                foreach (var item in _tentObjects)
+                if (_tentObjects == null || _tentObjects.Count == 0)
                 {
-                    if (item.ItemID == 0) continue;
+                    SendInteriorDyes(player);
+                    return;
+                }
 
-                    SendPacket pkt = new SendPacket();
-                    pkt.Pack8(23);
-                    pkt.Pack8(3);
-                    pkt.Pack16(item.ItemID);
-                    pkt.Pack32((uint)item.tentX);
-                    pkt.Pack32((uint)item.tentY);
-                    pkt.Pack32((uint)item.floor);
-                    pkt.Pack8(1);
-                    pkt.Pack8(item.rotate);
-                    pkt.Pack16(0);
-                    player.Send(pkt);
+                // CN client (aLogin 0x8c3e84, reached from the main router at
+                // 0x75496b via AC62/dense57): the router passes the packet
+                // WITHOUT the AC byte, so the dispatcher's first payload byte
+                // is the sub-opcode. Batch reload = sub 4:
+                //   [62][4][ownerCharID u32] + N*([slot u16][57-byte record])
+                // (client reads owner at 1-based 2..5, slots from 6,
+                //  count = (len-5)/0x3b).
+                // Record layout from the store method 0x8c06b0:
+                //   itemID u16 @0, x u32 @2, y u32 @6, floor u32 @10,
+                //   kind u8 @14 — kind==1 is the ONLY path that preloads the
+                //   furniture sprite (itemIdx*0x1c3+0x19d lookup), so every
+                //   visible record must carry 1 there.
+                SendPacket p = new SendPacket();
+                p.Pack8(62);
+                p.Pack8(4);
+                p.Pack32(_owner.CharID);
+
+                int sentCount = 0;
+                for (int i = 0; i < _tentObjects.Count && sentCount < 50; i++)
+                {
+                    var item = _tentObjects[i];
+                    if (item == null || item.ItemID == 0) continue;
+
+                    byte[] rec = new byte[57];
+                    rec[0] = (byte)(item.ItemID & 0xFF);
+                    rec[1] = (byte)((item.ItemID >> 8) & 0xFF);
+                    Put32(rec, 2, item.tentX);
+                    Put32(rec, 6, item.tentY);
+                    Put32(rec, 10, (uint)item.floor);
+                    rec[14] = 1; // kind: sprite-preload path
+
+                    p.Pack16((ushort)(sentCount + 1));
+                    p.PackArray(rec);
                     sentCount++;
                 }
 
-                DebugSystem.Write(DebugItemType.Error, $"[Tent]  Sent {sentCount} items via AC 23:3 to {player.CharName} (MapID={this.MapID})");
+                player.Send(p);
+                DebugSystem.Write(DebugItemType.Error, $"[Tent] Sent {sentCount} items via AC62:4 to {player.CharName} (owner={_owner.CharID}) Hex={BitConverter.ToString(p.Buffer.ToArray())}");
+
+                // Dyes must follow the furniture batch: the client's AC62:4
+                // handler resets the interior fields (aLogin 0x8c46b3 ->
+                // 0x8cb330 zeroes +0x1a66/+0x1a68), wiping dyes sent earlier.
+                SendInteriorDyes(player);
             }
             catch (Exception ex)
             {
                 DebugSystem.Write(DebugItemType.Error, $"[Tent] Error sending items to player: {ex.Message}");
             }
+        }
+
+        static void Put32(byte[] buf, int off, uint v)
+        {
+            buf[off] = (byte)(v & 0xFF);
+            buf[off + 1] = (byte)((v >> 8) & 0xFF);
+            buf[off + 2] = (byte)((v >> 16) & 0xFF);
+            buf[off + 3] = (byte)((v >> 24) & 0xFF);
+        }
+
+        /// <summary>
+        /// CN interior dyes: 62:14 floor tile itemID (0x8c55c1 -> 0x8cc2f4,
+        /// 0 or 39062 = default wood), 62:15 wallpaper itemID (0x8c55fb ->
+        /// 0x8cc3b0, maps Wallpaper N to Pillar N-4 display). Must be sent
+        /// only after any AC62:4 batch — the batch resets these fields.
+        /// </summary>
+        void SendInteriorDyes(Player player)
+        {
+            player.Send(Tools.FromFormat("bbW", 62, 14, _floorcolor));
+            player.Send(Tools.FromFormat("bbW", 62, 15, _wallcolor));
         }
 
         /// <summary>

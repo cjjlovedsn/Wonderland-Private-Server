@@ -428,6 +428,19 @@ namespace DataBase
             DebugSystem.Write("Found chartent_items table");
             #endregion
 
+            #region daily_draw Verification
+            DebugSystem.Write("Checking for daily_draw table");
+            if (ServType == RCLibrary.Core.DataBaseTypes.Sqlite)
+            {
+                ExecuteNonQuery("CREATE TABLE IF NOT EXISTS daily_draw (charID INTEGER NOT NULL, day TEXT NOT NULL, used INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (charID, day));");
+            }
+            else
+            {
+                ExecuteNonQuery("CREATE TABLE IF NOT EXISTS daily_draw (charID INT NOT NULL, day VARCHAR(10) NOT NULL, used INT NOT NULL DEFAULT 0, PRIMARY KEY (charID, day)) ENGINE=InnoDB DEFAULT CHARSET=utf8;");
+            }
+            DebugSystem.Write("Found daily_draw table");
+            #endregion
+
             #region charquest Verification
             DebugSystem.Write("Checking for charquest table");
         retry4:
@@ -894,6 +907,14 @@ namespace DataBase
             }
         }
 
+        // Web-side edits bypass Player objects; drop any cached snapshot so the
+        // next login/char-list read reloads from the database.
+        public void EvictCache(uint charID)
+        {
+            Character removed;
+            Cache.TryRemove((int)charID, out removed);
+        }
+
         public DataTable GetAllCharacters()
         {
             try
@@ -1085,6 +1106,11 @@ namespace DataBase
                         t[i].Forge = c[i].Forge;
                     }
                 }
+                // The cached path used to return here, skipping the tent-load
+                // region at the bottom: returning characters never reloaded
+                // their furniture, and the next tent save wiped the DB rows.
+                try { LoadTentData(t); }
+                catch (Exception ex) { DebugSystem.Write($"[DEBUG] Error loading tent data for {t.CharName}: {ex.Message}"); }
                 return true;
             }
 
